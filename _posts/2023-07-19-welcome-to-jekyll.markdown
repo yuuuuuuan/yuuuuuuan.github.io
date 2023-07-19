@@ -1,10 +1,10 @@
 ---
 layout: post
-title:  "第一个blog"
+title:  "blog"
 date:   2023-07-19 16:28:12 +0530
 categories: helloworld
 ---
-我的第一个博客
+first blog
 
 [jekyll-docs]: https://jekyllrb.com/docs/home
 [jekyll-gh]:   https://github.com/jekyll/jekyll
