@@ -73,14 +73,6 @@ JWT是无状态的，意味着所有必要的信息都包含在令牌本身中�
 
 由于JWT通常设置为在特定时间后过期，因此对用户会话的实时控制可能会有挑战。要求更短的过期时间可以提高安全性，但也会增加用户频繁登录的次数。
 
-- 缺乏集中管理
-
-由于JWT是自包含且无状态的，因此没有集中的管理或对活动令牌的可见性。这使得执行全局操作（如从所有设备注销或查看活动会话）变得更加困难。
-
-- 令牌盗窃和重放攻击
-
-如果攻击者成功盗取JWT，他们可以在其过期之前一直使用它。一旦颁发了令牌，就无法使其无效。此外，如果JWT被拦截并在有效期内恶意使用，重放攻击就有可能发生。
-
 ## 示例
 
 - 安装jwt-go
@@ -113,6 +105,7 @@ type Claims struct {
 其中jwt.StandardClaims包含：
 
 ```
+
 type StandardClaims struct {
   Audience  string `json:"aud,omitempty"`
   ExpiresAt int64  `json:"exp,omitempty"`
@@ -122,18 +115,49 @@ type StandardClaims struct {
   NotBefore int64  `json:"nbf,omitempty"`
   Subject   string `json:"sub,omitempty"`
 }
+
 ```
 
 使用 jwt-go 库根据指定的算法生成 jwt token ，主要用到两个方法：
 
 ```
+
 func jwt.NewWithClaims(method jwt.SigningMethod, claims jwt.Claims) *jwt.Token
 //jwt.NewWithClaims 方法根据 Claims 结构体创建 Token 示例
 
 func (*jwt.Token).SignedString(key interface{}) (string, error)
 //SignedString 方法根据传入的空接口类型参数 key，返回完整的签名令牌
+
 ```
 
 - 解析Token
 
-- 刷新Token
+解析JWT Token的意义在于确保数据的真实性和完整性，获取有效的用户信息和权限声明，以及实现安全的身份验证和授权机制。
+
+```
+
+func ParseToken(tokenString string) (claims *MyClaims, err error) {
+	// 解析token
+	var token *jwt.Token
+	claims = new(MyClaims)
+	token, err = jwt.ParseWithClaims(tokenString, claims, keyFunc)
+	if err != nil {
+		return
+	}
+	if !token.Valid { // 校验token
+		err = errors.New("invalid token")
+	}
+	return
+}
+
+```
+
+最后输出
+
+```
+
+token生成成功token is eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyaWQiOjEyMzQ1NiwiVXNlck5hbWUiOiJ5dXV1dXV1YW4iLCJleHAiOjE2ODk4NTc3MDQsImlzcyI6ImFkbWluI
+n0.Mm0vvVvspBldKtVd3WZ-WIiUQa-ALm84heverMa95Ls
+token解析成功claims is &{123456 yuuuuuuan { 1689857704  0 admin 0 }}
+
+```
