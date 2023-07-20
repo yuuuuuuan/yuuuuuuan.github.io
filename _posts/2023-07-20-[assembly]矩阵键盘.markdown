@@ -59,7 +59,271 @@ categories: assembly
 
 扫描完成后，微控制器会根据检测到的按键状态编码并记录按键的位置。通常，这个编码可以使用一个数字或其他标识来表示按下的按键。
 
+- 16个按键的编码：
+
+EEH, DEH, BEH, 7EH
+EDH, DDH, BDH, 7DH
+EBH, DBH, BBH, 7BH
+E7H, D7H, B7H,77H
+
 **输出数据：**
 
 在检测完成后，微控制器会将按键状态传递给相应的处理程序或应用程序。这样，就可以知道哪些按键被按下，进而执行相应的操作。
 
+## 代码实现
+
+- 线反转法
+
+```
+
+//先行全扫描输出,置列为输入
+KEYSCAN：MOV  P1, #0F0H ; 读列（高4位）引脚前先送高电平
+                      MOV  A, P1          ;读入高4位列状态，判断是否有键按下
+                      CJNE  A, #0F0H, KEYC ; 列不全为1，说明有键按下，转按下键的处理
+RETURN：RET                                    ; 没有键按下，退出键盘识别
+     KEYC：LCALL  DELAY4ms         ; 延时消除抖动
+	   MOV  A, P1    
+                   CJNE  A, #0F0H, KEYID   ; 确实有键按下，则转入键识别处理
+	   LJMP  RETURN                 ; 是干扰引起的抖动，不予处理
+KEYID: MOV  SCANCODE, A  ; 低四位代表行，为0000；高四位代表列
+//行列反转，置列全扫描输出,行为输入
+	MOV  P1, #0FH          ;读行（低4位）引脚前先送高电平
+	NOP
+	NOP                            ; 适当短延时，待端口电平稳定
+	MOV  A, P1                ; 闭合键的对应行被拉低，将行状态存入A中
+               ADD  A, SCANCODE 
+	MOV  SCANCODE, A ; 将行列相加，得到键扫描码SCANCODE
+//下面等待键释放
+KEYUP: MOV  A, P1       
+	 CJNE  A, #0FH, KEYUP  ; 按键没有松开，则继续等待
+	 LCALL  DELAY4ms      ; 延时消除抖动
+                MOV  A, P1     
+	 CJNE  A, #0FH, KEYUP  
+               MOV  DPTR,  #KEYCODE ; 按键编码处理
+               MOV  KEY_index, #0
+KEYLOOP：MOV  A, KEY_index
+                      MOVC  A, @A+DPTR
+                      CJNE  A, SCANCODE, NEXTKEY
+                      MOV  KEY_NUM, KEY_index ；得到键值，置入KEY_NUM
+                      RET
+NEXTKEY：INC KEY_index
+	      AJMP KEYLOOP
+KEYCODE：DB  0EEH, 0DEH, 0BEH, 7EH, 0EDH, 0DDH, 0BDH, 7DH
+                       DB  0EBH, 0DBH, 0BBH, 7BH, 0E7H, 0D7H, 0B7H,77H
+
+```
+
+- 逐行扫描法(外加单片机LED显示，本次设计最终采用的方式)
+
+省略了部分IO口定义，这些是一些基本常量的规定以及空间分配
+
+```
+;*************	IO口定义	**************
+HC595_SER      BIT  P4.0	           ;   串行数据输入引脚
+HC595_RCLK    BIT  P5.4            ;   锁存时钟
+HC595_SRCLK  BIT  P4.3            ;   移位时钟
+STACK_P	EQU    0D0H           ;   堆栈开始地址
+DIS_BLACK	EQU    10H              ;   消隐的索引值
+;*************       本地变量声明	       ***********
+LED8	DATA    30H             ;   显示缓冲 30H ~ 37H
+disp_index	DATA    38H             ;   显示位索引
+KEY_NUM8 DATA 60H
+SCANCODE DATA 44H
+KEY_index DATA 45H	
+	ORG 0000H
+	LJMP START
+	ORG 0100H
+```
+
+程序执行入口：
+
+```
+START:
+CLR      A
+	      MOV   P0M1, A 	;设置为准双向口
+ 	      MOV   P0M0, A
+	      MOV   P3M1, A 	;设置为准双向口
+ 	      MOV   P3M0, A
+	      MOV   P4M1, A 	 
+ 	      MOV   P4M0, A
+	      MOV   P5M1, A 	
+ 	      MOV   P5M0, A
+	      MOV   SP, #STACK_P
+	      MOV   disp_index, #0	
+MOV   SCANCODE,#00H
+	MOV   disp_index,  #0                        
+    MOV   R0, #LED8 
+	MOV	  R1, #50
+    MOV   R2, #8
+MOV KEY_NUM8+0,#16
+		MOV KEY_NUM8+1,#16
+		MOV KEY_NUM8+2,#16
+		MOV KEY_NUM8+3,#16
+		MOV KEY_NUM8+4,#16
+		MOV KEY_NUM8+5,#16
+		MOV KEY_NUM8+6,#16
+		MOV KEY_NUM8+7,#16
+MOV   SCANCODE,#00H
+		MOV   KEY_index,#0         
+   		MOV	R0, #LED8
+```
+
+逐行扫描后得出最后按下的按键键值存入SCANCODE,中
+
+```
+ClearLoop: MOV	@R0, #DIS_BLACK  
+	              INC	 R0
+	              DJNZ	R2,  ClearLoop	
+				  
+Key_loop:
+		DJNZ	R1,Key_loop1	
+		LCALL   KeyScan
+		MOV		R1,#50		;50ms扫描一次
+Key_loop1:
+					LCALL   delay_ms1	
+	                LCALL   KeyScan
+		LCALL   Key_DispScan
+	                LJMP    Key_loop        
+	
+
+	 KeyScan:
+  		SETB P4.6
+		MOV P0,#0FFH
+		
+		MOV P0,#0EFH
+		MOV A,P0
+		ANL A,#0FH
+		ADD A,#0E0H
+		CJNE A,#0EFH,ON
+		
+		MOV P0,#0FFH
+		
+		MOV P0,#0DFH
+		MOV A,P0
+		ANL A,#0FH
+		ADD A,#0D0H
+		CJNE A,#0DFH,ON  
+		
+		MOV P0,#0FFH
+		
+		MOV P0,#0BFH
+		MOV A,P0
+		ANL A,#0FH
+		ADD A,#0B0H
+		CJNE A,#0BFH,ON
+		
+		MOV P0,#0FFH
+			
+		MOV P0,#7FH
+		MOV A,P0
+		ANL A,#0FH
+		ADD A,#70H
+		CJNE A,#7FH,ON
+		RET
+		
+		ON:MOV SCANCODE,A
+		WAIT:	MOV P0,#0FFH
+		LCALL delay_ms1
+		MOV A,P0
+		CJNE A,#0FFH,WAIT
+		LJMP KEYLOOP	
+   KEYLOOP:
+		  
+		  MOV DPTR,#KEYCODE
+		  MOV  A, KEY_index
+          MOVC  A, @A+DPTR
+          CJNE  A, SCANCODE, NEXTKEY
+		  CLR P4.6
+		  MOV	A,KEY_index
+		  CJNE	A,KEY_NUM8+0, ZUOYI
+		  RET
+```
+
+将打印的数原本显示在最左边，再次输入数后读取显示在数码管上时前一位左移(达到计算器输入类似效果)
+
+```
+ZUOYI:		  
+		  MOV	KEY_NUM8+7,KEY_NUM8+6		
+		  MOV	KEY_NUM8+6,KEY_NUM8+5
+		  MOV	KEY_NUM8+5,KEY_NUM8+4
+		  MOV	KEY_NUM8+4,KEY_NUM8+3
+		  MOV	KEY_NUM8+3,KEY_NUM8+2
+		  MOV	KEY_NUM8+2,KEY_NUM8+1
+		  MOV	KEY_NUM8+1,KEY_NUM8+0
+		  MOV	KEY_NUM8+0,KEY_index
+          RET
+  NEXTKEY:INC KEY_index
+	      LJMP KEYLOOP
+
+```
+
+下列实现为C 51中的HC595驱动程序用于驱动数码管
+
+```
+Key_DispScan:       
+	              
+	              MOV	LED8+0, KEY_NUM8+7
+				  MOV	LED8+1, KEY_NUM8+6
+				  MOV	LED8+2, KEY_NUM8+5
+				  MOV	LED8+3, KEY_NUM8+4
+				  MOV	LED8+4, KEY_NUM8+3
+				  MOV	LED8+5, KEY_NUM8+2
+				  MOV	LED8+6, KEY_NUM8+1
+				  MOV	LED8+7, KEY_NUM8+0
+ 	              MOV        R7, #8
+	
+Key_NEXT:	
+			
+			MOV	DPTR, #K_COM   
+	        MOV	A, disp_index     
+	        MOVC	A, @A+DPTR
+	        CPL 	A                      
+	        LCALL	Send_595	
+	        MOV	DPTR, #K_Disp 
+	        MOV	A, disp_index
+	        ADD	A, #LED8
+	        MOV	R0, A
+	        MOV	A, @R0
+MOVC	A, @A+DPTR
+LCALL	Send_595	
+CLR	 HC595_RCLK	
+SETB	HC595_RCLK
+
+INC	 disp_index     
+DJNZ    R7, Key_NEXT
+MOV	disp_index, #0 
+RET
+
+Send_595:   MOV   R2, #8
+Send_Loop: RLC      A
+	                  MOV  HC595_SER, C
+	                  CLR    HC595_SRCLK 
+                      SETB  HC595_SRCLK  ; 产生移位脉冲
+	                  DJNZ  R2, Send_Loop
+	                  RET
+```
+
+延时函数
+
+```	   
+delay_ms1: MOV      R7,#100    
+
+       DJNZ     R7,$
+
+       RET
+```	
+
+KEYCODE对应数码管的显示位数以及显示值
+
+```
+KEYCODE:DB 0EEH,0EDH,0EBH,0E7H,0DEH,0DDH,0DBH,0D7H
+	DB 0BEH,0BDH,0BBH,0B7H,07EH,07DH,07BH,77H
+	
+K_Disp:DB 3FH,06H,5BH,4FH,66H,6DH,7DH,07H,7FH,6FH,77H,7CH,39H,5EH,79H,71H,00H
+
+K_COM: DB 01H,02H,04H,08H
+       DB 10H,20H,40H,80H
+				   
+		
+END
+```
