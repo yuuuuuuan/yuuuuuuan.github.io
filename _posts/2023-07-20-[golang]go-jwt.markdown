@@ -5,6 +5,8 @@ date:   2023-07-20
 categories: golang
 ---
 
+在golang中jwt的运用
+
 ## 介绍
 
 JWT (JSON Web Token) 是一种开放标准（RFC 7519），用于在不同实体之间安全地传输信息。它是一种基于 JSON 的令牌，通常由服务器生成，并且可以被用于验证和授权用户的访问权限。
