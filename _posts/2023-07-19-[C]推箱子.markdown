@@ -97,6 +97,22 @@ unsigned char  KeyScan(void)
 
 要在LCD上显示文本或图形，您需要将数据转换为相应的像素点。在文本模式下，字符会被转换为预定义的像素点，然后逐个显示在屏幕上。在图形模式下，您可以通过设置像素点的状态来显示图形。
 
+- 写指令
+
+```
+//写指令
+void WriteCommandLCD(u8 WCLCD,BuysC) //BuysC为0时忽略忙检测
+{
+    if (BuysC) ReadStatusLCD(); //根据需要检测忙 
+    LCD_RS = 0;
+    LCD_RW = 0; 
+    LCD_Data = WCLCD;
+        LCD_delay();
+    LCD_E = 1; 
+    LCD_delay();
+    LCD_E = 0;  
+}
+```
 - 写数据
 
 - 读数据
