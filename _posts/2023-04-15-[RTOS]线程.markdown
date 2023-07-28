@@ -1,6 +1,6 @@
 ---
 layout: post
-title:  "[RTOS]设计:操作系统中线程的概念以及运用"
+title:  "[RTOS]回顾:操作系统中线程的概念以及运用"
 date:   2023-04-15
 categories: C语言   RTOS
 ---
@@ -141,21 +141,21 @@ static void thread1_entry(void *parameter)
 ```
 
  \ | /
--- RT -     Thread Operating System<br>
- / | \     3.1.0 build Jun 26 2023<br>
- 2006 - 2018 Copyright by rt-thread team<br>
-msh >thread_sample<br>
-msh >thread2 count: 0<br>
-thread1 count: 0<br>
-thread2 count: 1<br>
-thread1 count: 1<br>
-thread2 count: 2<br>
-thread1 count: 2<br>
-thread2 count: 3<br>
-thread1 count: 3<br>
-thread2 count: 4<br>
-thread1 count: 4<br>
-thread2 count: 5<br>
-thread1 count: 5<br>
+-- RT -     Thread Operating System
+ / | \     3.1.0 build Jun 26 2023
+ 2006 - 2018 Copyright by rt-thread team
+msh >thread_sample
+msh >thread2 count: 0
+thread1 count: 0
+thread2 count: 1
+thread1 count: 1
+thread2 count: 2
+thread1 count: 2
+thread2 count: 3
+thread1 count: 3
+thread2 count: 4
+thread1 count: 4
+thread2 count: 5
+thread1 count: 5
 ```
 由于线程2优先级高于线程1，所以总是在线程2完成后挂起，才会运行线程1
