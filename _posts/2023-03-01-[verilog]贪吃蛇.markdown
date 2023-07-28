@@ -1,7 +1,7 @@
 ---
 layout: post
 title:  "[verilog]项目:基于FPGA和VGA显示模块的贪吃蛇游戏实现"
-date:   2023-02-28 
+date:   2023-03-01
 categories: verilog
 ---
 FPGA 利用VGA显示屏做的贪吃蛇游戏
