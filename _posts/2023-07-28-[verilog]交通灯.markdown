@@ -4,3 +4,4 @@ title:  "[verilog]设计:交通灯"
 date:   2023-07-28 
 categories: verilog
 ---
+FPGA使用verilog语言设计交通灯
