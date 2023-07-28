@@ -1,6 +1,6 @@
 ---
 layout: post
-title:  "[golang]学习:GO-JWT"
+title:  "[golang]学习:JWT在golang中的原理及其实现"
 date:   2023-07-20
 categories: golang
 ---

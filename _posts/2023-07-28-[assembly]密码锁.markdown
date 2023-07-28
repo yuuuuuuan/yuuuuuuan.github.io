@@ -1,6 +1,6 @@
 ---
 layout: post
-title:  "[assembly]设计:密码锁"
+title:  "[assembly]设计:基于C51的密码锁实现"
 date:   2023-07-28 
 categories: assembly
 ---

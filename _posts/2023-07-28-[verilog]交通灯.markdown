@@ -1,6 +1,6 @@
 ---
 layout: post
-title:  "[verilog]设计:交通灯"
+title:  "[verilog]设计:基于verilog的交通灯原理及其实现"
 date:   2023-07-28 
 categories: verilog
 ---

@@ -1,6 +1,6 @@
 ---
 layout: post
-title:  "[verilog]项目:贪吃蛇"
+title:  "[verilog]项目:基于FPGA和VGA显示模块的贪吃蛇游戏实现"
 date:   2023-02-28 
 categories: verilog
 ---
