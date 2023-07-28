@@ -2,7 +2,7 @@
 layout: post
 title:  "简历"
 date:   2024-06-30
-categories: profiles
+categories: 
 ---
 
 这里是求职简历
