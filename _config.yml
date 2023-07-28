@@ -18,7 +18,7 @@ plainwhite:
   sitemap: true # set to true to generate sitemap.xml content
   search: true # set to true to enable searchbar
   dark_mode: true # set to true to add dark mode toggle
-  portfolio_image: "assets/download.jpg" # the path from the base directory of the site to the image to display (no / at the start)
+  portfolio_image: "assets/99110203.png" # the path from the base directory of the site to the image to display (no / at the start)
   html_lang: "zh-cn" # set the lang attribute of the <html> tag for the pages. See here for a list of codes: https://www.w3schools.com/tags/ref_country_codes.asp
   condensed_mobile:
     #- home
@@ -27,7 +27,7 @@ plainwhite:
   # generate social links in footer
   social_links:
     twitter: samarsault
-    github:  https://github.com/yuuuuuuan
+    github:  yuuuuuuan
     #linkedIn: in/samarsault
     #dribbble: jekyll
     #flickr:   jekyll
