@@ -2,5 +2,160 @@
 layout: post
 title:  "[RTOS]设计:操作系统中线程的概念以及运用"
 date:   2023-04-15
-categories: RTOS
+categories: C语言   RTOS
 ---
+
+认识操作系统中的线程以及线程的使用
+
+##介绍
+
+- 线程
+
+在 RT-Thread 中，最基本的调度单位是线程，其他 RTOS 也叫任务。如果学习过或者了解过 RTOS，任务这种叫法是最为熟知的。
+
+线程，即任务的载体。一般被设计成 while(1) 的循环模式，但在循环中一定要有让出 CPU 使用权的动作。如果是可
+以执行完毕的线程，则系统会自动将执行完毕的线程进行删除 / 脱离。
+
+-- 线程调度
+
+对于一款 RTOS 来说，最核心的部分就是线程（任务）调度器。调度器的作用是根据调度算法来决定当前需要执行的线程。
+
+RT-Thread 的线程调度器是抢占式的，基于优先级对线程进行调度。每个线程均具有一个优先级，调度器的主要工作是，从就绪线程列表中查找最高优先级线程，然后将 CPU 的使用权分配给它。
+
+"可抢占"意味着，如果高优先级线程就绪或者满足运行条件，RT-Thread 马上将 CPU 的控制权交给高优先级线程。
+
+
+-- 线程优先级
+
+RT-Thread 线程的优先级表示线程被调度的优先程度。每个线程都具有优先级，对于重要的线程，应该赋予其高优先级，这样才能保证线程被优先调度。
+
+RT-Thread 最大支持 256个优先级（0~255），数值越小的线程优先级越高。0 为最高优先级。最低优先级默认分配给空闲线程，用户一般不用。
+
+-- 线程栈
+
+RT-Thread 允许多个线程具有相同的优先级，相同优先级的线程之间采用时间片轮转的方式进行调度。创建线程的时候，可以配置线程的时间片参数。时间片仅对优先级相同的就绪线程有效。
+
+时间片的作用是约束线程单次运行的时长，其单位是系统时钟节拍（OS Tick）。
+
+-- 线程的函数入口
+
+RT-Thread 线程具有独立的栈，当进行线程切换时，会将当前线程的上下文存在栈中，当线程要恢复运行时，再从栈中读取上下文信息，进行恢复。
+
+线程栈还用来存放函数中的局部变量。当一个函数调用另外一个函数时，函数中的局部变量会暂时存放在栈中。
+
+- 线程控制块
+
+初始化线程包含上列的各种参数
+
+'''
+rt_err_t rt_thread_init(struct rt_thread *thread,          //线程地址
+                        const char       *name,                          //线程名字
+                        void (*entry)(void *parameter),          //线程入口
+                        void             *parameter,                      //线程入口函数参数
+                        void             *stack_start,                     //栈初始地址
+                        rt_uint32_t       stack_size,                   //栈大小
+                        rt_uint8_t        priority,                        //优先级
+                        rt_uint32_t       tick)                             //时间片
+'''
+
+## 线程状态
+
+对于单 CPU 来说，系统运行过程中，同一时刻只有一个线程在处理器运行。在运行过程中，线程有多种不同的运行状态：
+
+- 初始状态
+
+线程刚创建还未开始运行时处于的状态，此状态下，线程不参与调度。
+
+- 就绪状态
+
+线程具备运行条件的状态，等待被调度器调度执行。
+
+- 运行状态
+
+线程正在运行。
+
+- 挂起状态
+
+也称为阻塞状态。由于资源不可用或线程主动延时一段时间，而进入的状态。线程不能执行。
+
+- 关闭状态
+
+线程运行结束处于的状态。此时线程不参与调度。
+
+## 创建线程示例
+
+线程1的入口函数
+
+'''
+/* 线程1的入口函数 */
+static void thread1_entry(void *parameter)
+{
+    rt_uint32_t count = 0;
+
+    while (1)
+    {
+        flag = 1;
+				/* 线程1采用低优先级运行，一直打印计数值 */
+        rt_kprintf("thread1 count: %d\n", count ++);
+        rt_thread_mdelay(100);
+    }
+}
+'''
+
+动态创建线程1
+
+'''
+/* 创建线程1，名称是thread1，入口是thread1_entry*/
+    tid1 = rt_thread_create("thread1",
+                            thread1_entry, RT_NULL,
+                            THREAD_STACK_SIZE,
+                            THREAD_PRIORITY, THREAD_TIMESLICE);
+    
+    /* 如果获得线程控制块，启动这个线程 */
+    if (tid1 != RT_NULL)
+        rt_thread_startup(tid1);
+'''
+
+以线程2的入口函数用静态的方式创建线程2
+
+'''
+/* 初始化线程2，名称是thread2，入口是thread2_entry */
+    rt_thread_init(&thread2,
+                   "thread2",
+                   thread2_entry,
+                   RT_NULL,
+                   &thread2_stack[0],
+                   sizeof(thread2_stack),
+                   THREAD_PRIORITY - 1, THREAD_TIMESLICE);
+    rt_thread_startup(&thread2);
+'''
+
+优先级，栈大小以及时间片大小的参数
+'''
+#define THREAD_PRIORITY         25
+#define THREAD_STACK_SIZE       512
+#define THREAD_TIMESLICE        5
+'''
+
+打印信息
+'''
+
+ \ | /
+- RT -     Thread Operating System
+ / | \     3.1.0 build Jun 26 2023
+ 2006 - 2018 Copyright by rt-thread team
+msh >thread_sample
+msh >thread2 count: 0
+thread1 count: 0
+thread2 count: 1
+thread1 count: 1
+thread2 count: 2
+thread1 count: 2
+thread2 count: 3
+thread1 count: 3
+thread2 count: 4
+thread1 count: 4
+thread2 count: 5
+thread1 count: 5
+'''
+由于线程2优先级高于线程1，所以总是在线程2完成后挂起，才会运行线程1
