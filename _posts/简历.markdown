@@ -1,7 +1,7 @@
 ---
 layout: post
 title:  "简历"
-date:   
+date:   2023-07-28 
 categories: 
 ---
 
