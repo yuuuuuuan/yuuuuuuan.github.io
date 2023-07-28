@@ -2,7 +2,7 @@
 layout: post
 title:  "[C]项目:基于C51和LCD12864的推箱子游戏实现"
 date:   2023-01-30 
-categories: C++
+categories: C语言
 ---
 
 基于STC15W4K32S4系列单片机实现推箱子游戏
