@@ -13,4 +13,250 @@ categories: assembly
 
 ## 设计思路
 
-设计多个状态，使用中断sw18切换，包含开机动画流水灯，键盘输入准备状态，键盘输入状态，验证密码及其结果显示，最后回到开机动画流水灯。<br>中断sw17切换流水灯流速，使用2个定时器，t0控制流水灯流速，t1控制各个状态切换的秒数。
+设计多个状态，使用中断sw18切换，包含开机动画流水灯，键盘输入准备状态，键盘输入状态，验证密码及其结果显示，最后回到开机动画流水灯。
+
+中断sw17切换流水灯流速，使用2个定时器，t0控制流水灯流速，t1控制各个状态切换的秒数。
+
+![image](/assets/图片2.png)
+*状态流图*
+## 设计代码
+
+开机后进入第一个循环：流水灯循环作为开机动画
+
+```
+Pre_loop1: 	                              ;开机流水灯循环
+		
+		LCALL   delay_ms1	
+	    LCALL   Pre_DispScan1
+		MOV A,MOD_123             
+		CJNE A,#2,Pre_loop1        ;按下中断后进入下一个状态
+	    LJMP Pre_loop2             
+```
+
+在这期间可以通过按下sw17调节流水灯的流速
+
+```
+INT0_ISR:  SETB  ET1  
+			MOV  TMOD,  #00H 
+           		MOV  TH1,  #0ECH    
+           		MOV  TL1,  #078H
+	              RETI	
+```
+
+之后按下sw18切换成输入密码状态，此时所有数码管小数点闪烁2s后进入预备输入密码阶段：Pre_loop2:                                                       ;数码管全亮闪烁后2s后进入小数点闪烁状态
+	
+
+		LCALL   delay_ms1
+		LCALL   Pre_DispScan2
+		MOV A,halfsecond
+		CJNE A,#4,Pre_loop2
+	    LJMP Pre_loop3
+
+后面正式进入密码输入阶段：
+
+```
+Key_loop:
+		DJNZ	R1,Key_loop1	
+		LCALL   KeyScan
+		MOV		R1,#50		;50ms扫描一次
+Key_loop1:
+		LCALL   delay_ms1		
+		LCALL   Key_DispScan		;输出数字
+		MOV A,MOD_123
+		CJNE A,#4,Key_loop
+	    LJMP Indentify
+
+```
+
+输入完成后再次按下sw18，此时MOD_123变为4，进入密码校验阶段：
+
+```
+Indentify:
+		
+		LCALL   delay_ms1
+		MOV A,KEY_NUM8+0
+		CJNE A,PSW8+0,WRONG
+		MOV A,KEY_NUM8+1
+		CJNE A,PSW8+1,WRONG
+		MOV A,KEY_NUM8+1
+		CJNE A,PSW8+1,WRONG
+		MOV A,KEY_NUM8+2
+		CJNE A,PSW8+2,WRONG
+		MOV A,KEY_NUM8+2
+		CJNE A,PSW8+2,WRONG
+		MOV A,KEY_NUM8+3
+		CJNE A,PSW8+3,WRONG
+		MOV A,KEY_NUM8+3
+		CJNE A,PSW8+3,WRONG
+		MOV A,KEY_NUM8+4
+		CJNE A,PSW8+4,WRONG
+		MOV A,KEY_NUM8+5
+		CJNE A,PSW8+5,WRONG
+		MOV A,KEY_NUM8+6
+		CJNE A,PSW8+6,WRONG
+		MOV A,KEY_NUM8+7
+		CJNE A,PSW8+7,WRONG
+		LJMP RIGHT
+```
+
+这里采用的是逐位校验的方式，从首位开始校验，如果有1位与密码不相符则直接跳转到WRONG：
+
+```
+WRONG:
+			MOV KEY_NUM8+0,#16
+			MOV KEY_NUM8+1,#16
+			MOV KEY_NUM8+2,#16
+			MOV KEY_NUM8+3,#16
+			MOV KEY_NUM8+4,#16
+			MOV KEY_NUM8+5,#16
+			MOV KEY_NUM8+6,#16
+			MOV KEY_NUM8+7,#16
+			LCALL delay_ms1
+			LCALL W_DispScan
+			MOV A,Fre_WRONG
+			CJNE A,#4,GOON
+			LJMP CLOSED
+GOON:		MOV A,halfsecond
+			CJNE A,#6,WRONG
+			INC Fre_WRONG
+			LJMP Pre_loop1
+```
+
+这里将原来密码输入初始化并且调用W_DispScan函数进入错误显示和计数器使其调用595编码器在数码管上显示WRONG 显示 2s 后跳出循环重新进入密码输入阶段：
+
+```
+W_DispScan:
+				MOV LED8+0,#0
+				MOV LED8+1,#1
+				MOV LED8+2,#2
+				MOV LED8+3,#3
+				MOV LED8+4,#4
+				MOV LED8+5,#5
+				MOV LED8+6,#6
+				MOV LED8+7,#7
+				MOV R7,#8
+
+W_NEXT:
+			MOV	DPTR, #W_COM   ; 位码表头   
+	        MOV	A, disp_index      ;  数码管号
+	        MOVC	A, @A+DPTR
+	        CPL 	A                        ; 595级联时用的/Q7
+	        LCALL	Send_595	; 输出位码
+	        MOV	DPTR, #W_Disp ; 7段码表头
+	        MOV	A, disp_index
+	        ADD	A, #LED8
+	        MOV	R0, A
+	        MOV	A, @R0               ; 待显示的数
+MOVC	A, @A+DPTR
+LCALL	Send_595	; 输出段码
+CLR	 HC595_RCLK	; 产生锁存时钟
+SETB	HC595_RCLK
+
+INC	 disp_index      ; 下一数码管
+DJNZ    R7, W_NEXT
+MOV	disp_index, #0 ; 8位结束回0
+RET
+
+```
+
+同样密码输入成功后，会调用RIGHT函数，使密码初始化并且进入RIGHT的显示函数：
+
+```
+RIGHT:
+			MOV KEY_NUM8+0,#16
+			MOV KEY_NUM8+1,#16
+			MOV KEY_NUM8+2,#16
+			MOV KEY_NUM8+3,#16
+			MOV KEY_NUM8+4,#16
+			MOV KEY_NUM8+5,#16
+			MOV KEY_NUM8+6,#16
+			MOV KEY_NUM8+7,#16
+			LCALL delay_ms1
+			LCALL R_DispScan
+			MOV A,halfsecond
+			CJNE A,#6,RIGHT
+			LJMP Pre_loop1
+			
+```
+
+RIGHT显示函数：
+
+```
+R_DispScan:
+				MOV LED8+0,#0
+				MOV LED8+1,#1
+				MOV LED8+2,#2
+				MOV LED8+3,#3
+				MOV LED8+4,#4
+				MOV LED8+5,#5
+				MOV LED8+6,#6
+				MOV LED8+7,#7
+				MOV R7,#8
+				
+R_NEXT:
+			MOV	DPTR, #R_COM   ; 位码表头   
+	        MOV	A, disp_index      ;  数码管号
+	        MOVC	A, @A+DPTR
+	        CPL 	A                        ; 595级联时用的/Q7
+	        LCALL	Send_595	; 输出位码
+	        MOV	DPTR, #R_Disp ; 7段码表头
+	        MOV	A, disp_index
+	        ADD	A, #LED8
+	        MOV	R0, A
+	        MOV	A, @R0               ; 待显示的数
+MOVC	A, @A+DPTR
+LCALL	Send_595	; 输出段码
+CLR	 HC595_RCLK	; 产生锁存时钟
+SETB	HC595_RCLK
+
+INC	 disp_index      ; 下一数码管
+DJNZ    R7, R_NEXT
+MOV	disp_index, #0 ; 8位结束回0
+RET
+```
+
+在这里如果密码输入错误累计5次，则会进入CLOSED函数：
+
+```
+CLOSED:
+			LCALL delay_ms1
+			LCALL C_DispScan						
+			LJMP CLOSED
+```
+
+永远显示CLOSED并且不会返回到初始输入状态：
+
+```
+C_DispScan:
+				MOV LED8+0,#0
+				MOV LED8+1,#1
+				MOV LED8+2,#2
+				MOV LED8+3,#3
+				MOV LED8+4,#4
+				MOV LED8+5,#5
+				MOV LED8+6,#6
+				MOV LED8+7,#7
+				MOV R7,#8
+
+C_NEXT:
+			MOV	DPTR, #C_COM   ; 位码表头   
+	        MOV	A, disp_index      ;  数码管号
+	        MOVC	A, @A+DPTR
+	        CPL 	A                        ; 595级联时用的/Q7
+	        LCALL	Send_595	; 输出位码
+	        MOV	DPTR, #C_Disp ; 7段码表头
+	        MOV	A, disp_index
+	        ADD	A, #LED8
+	        MOV	R0, A
+	        MOV	A, @R0               ; 待显示的数
+MOVC	A, @A+DPTR
+LCALL	Send_595	; 输出段码
+CLR	 HC595_RCLK	; 产生锁存时钟
+SETB	HC595_RCLK
+
+INC	 disp_index      ; 下一数码管
+DJNZ    R7, C_NEXT
+MOV	disp_index, #0 ; 8位结束回0
+RET
+```
+
