@@ -89,7 +89,7 @@ unsigned char  KeyScan(void)
 
 #### 显示逻辑
 
-![image](assets\2018050313314840.png)
+![image](/assets/2018050313314840.png)
 
 *引脚图（引脚4到14为主要功能引脚）*
 
@@ -133,7 +133,7 @@ void WriteCommandLCD(u8 WCLCD,BuysC) //BuysC为0时忽略忙检测
     LCD_E = 0;  
 }
 ```
-![image](assets\20180706232728504.png)
+![image](/assets/20180706232728504.png)
 
 *基础指令表*
 
@@ -534,5 +534,5 @@ code u8 Img_BLANK[64] =
 
 左边64×64为游戏区域，右边64×64为关卡数以及游戏时间
 
-![image](assets\图片1.png)
+![image](/assets/图片1.png)
 
