@@ -5,7 +5,7 @@ date:   2022-11-15
 categories: assembly
 ---
 
-用汇编利用单片机寄存器设计密码锁
+[源码在这里](https://github.com/yuuuuuuan/codedlock)	用汇编利用单片机寄存器设计密码锁
 
 ## 介绍
 
@@ -19,6 +19,7 @@ categories: assembly
 
 ![image](/assets/图片2.png)
 *状态流图*
+
 ## 设计代码
 
 开机后进入第一个循环：流水灯循环作为开机动画
