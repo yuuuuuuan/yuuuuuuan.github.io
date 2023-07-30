@@ -14,3 +14,193 @@ FPGA使用verilog语言设计交通灯
 （3）乡间公路右侧各埋有一个串连传感器，当有车辆准备通过乡间公路时，发出请求信号S=1，其余时间S=0；<br>
 （4）平时系统停留在主干道通行（MGCR）状态，一旦S信号有效，经主道黄灯4秒（MYCR）状态后转入乡间公路通行（MRCG）状态，但要保证主干60s后才能转换；<br>
 （5）一旦S信号消失，系统脱离MRCG状态，即经乡道黄灯4秒（MRCY）状态进入MGCR状态，即使S信号一直有效，MRCG状态不得长于20秒钟。
+
+## 实现原理
+
+- 实验仿真
+
+![](/assets/交通灯仿真1.png)
+
+![](/assets/交通灯仿真2.png)
+
+*这里仿真要将计数器cnt的频率49999999降低到尽可能小，不然可能在仿真中难以观测*
+
+在仿真中CLED表示主道，MLED表示次道，在主道绿灯001亮起时次道为红灯100，过4秒主道变为黄灯次道依然为红灯，最后主道变为红灯，次道才变为绿灯001。
+
+![image](/assets/捕获999999999999999999999999999999.PNG)
+
+*原理状态图*
+
+- 实验代码
+
+首先用一个always设定计数器cnt使其大概为1s震荡一次
+
+```
+always @(posedge CLK)
+		begin
+			cnt<=cnt+1;
+			if(cnt>(49999999))		//49999999
+				begin
+					cnt<=0;
+					C<=1'b1;
+				end
+			else
+				C<=1'b0;
+		end
+```
+
+状态1：
+
+```
+S1:
+							begin
+								if(Num=='d0)
+									begin
+										if(S==1)
+											begin
+												state=S2;
+												MLED=3'b010;
+												CLED=3'b001;
+												Num<='d4;
+											end		//60s结束后进入S2								
+										else
+											begin
+												state=S1;
+												MLED=3'b001;
+												CLED=3'b100;
+												Num<='d60;
+											end    //S不等于1继续在S1状态
+									end
+							end
+```
+
+状态2：
+
+```
+S2:
+							begin
+								if(S==0)
+									begin
+										state=S4;
+										MLED=3'b100;
+										CLED=3'b010;
+										Num<='d4;
+									end  //S等于0进入S4
+								else
+									begin
+										if(Num=='d0)
+											begin
+												state=S3;
+												MLED=3'b100;
+												CLED=3'b001;
+												Num<='d20;
+											end
+									end  //S等于1且NUM等于0进入S3开始20s倒计时
+							end
+```
+
+状态3：
+
+```
+S3:
+							begin
+								if(S==0)
+									begin
+										state=S4;
+										MLED=3'b100;
+										CLED=3'b010;
+										Num<='d4;
+									end //S等于0返回前一个状态
+								if(Num=='d0)
+									begin
+										state=S4;
+										MLED=3'b100;
+										CLED=3'b010;
+										Num<='d4;
+									end  //S等于1且NUM等于0进入S4
+							end
+```
+
+状态4：
+
+```
+S4:
+							begin
+								if(Num=='d0)
+									begin
+										state=S1;
+										MLED=3'b001;
+										CLED=3'b100;
+										Num<='d60;
+									end
+							end
+						default:
+							begin
+								state=S1;
+								MLED=3'b001;
+								CLED=3'b100;
+								Num<='d60;
+							end
+					endcase
+				end
+		end
+```
+
+通过state转换来轮换4个状态：
+
+```
+always @(posedge CLK or negedge RST)
+		begin
+			if(!RST)
+				begin
+					state=S1;
+					MLED=3'b001;
+					CLED=3'b100;
+					Num<='d60;
+				end 设置初始状态
+			else				
+				begin
+					Num<=Num-1;
+					case(state)
+```
+
+最后在数码管上显示，下面是数码管驱动代码采用10进制：
+
+```
+always @(Num)
+			begin
+				Num2<=(Num/10%10);
+				Num1<=(Num%10);
+				case(Num1)//7段译码值 
+
+					4'b0000:SEG1<=7'b1000000;
+					4'b0001:SEG1<=7'b1111001;
+					4'b0010:SEG1<=7'b0100100;
+					4'b0011:SEG1<=7'b0110000;
+					4'b0100:SEG1<=7'b0011001;
+					4'b0101:SEG1<=7'b0010010;
+					4'b0110:SEG1<=7'b0000010;
+					4'b0111:SEG1<=7'b1111000;
+					4'b1000:SEG1<=7'b0000000;
+					4'b1001:SEG1<=7'b0010000;
+					default:SEG1<=7'b0001110;
+				endcase
+				case(Num2)
+					4'b0000:SEG2<=7'b1000000;
+					4'b0001:SEG2<=7'b1111001;
+					4'b0010:SEG2<=7'b0100100;
+					4'b0011:SEG2<=7'b0110000;
+					4'b0100:SEG2<=7'b0011001;
+					4'b0101:SEG2<=7'b0010010;
+					4'b0110:SEG2<=7'b0000010;
+					4'b0111:SEG2<=7'b1111000;
+					4'b1000:SEG2<=7'b0000000;
+					4'b1001:SEG2<=7'b0010000;
+					default:SEG2<=7'b0001110;
+				endcase
+			end
+```
+
+最后结果也与状态图相符
+
+![image](/assets/捕获999999999999999999999999999999.PNG)
