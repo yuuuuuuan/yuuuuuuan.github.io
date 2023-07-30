@@ -1,6 +1,225 @@
 ---
 layout: post
-title:  "[RTOS]回顾:操作系统中线程的概念以及运用"
+title:  "[RTOS]回顾:操作系统中时间片轮询"
 date:   2023-04-22
 categories: C语言   RTOS
 ---
+
+[源码在这里](https://github.com/yuuuuuuan/timeslice)	操作系统中时间片轮询
+
+## 介绍
+
+时间片轮询法是一种比较简单易用的系统架构之一，它对于系统中的任务调度算法是分时处理。核心思路是把 CPU 的时间分时给各个任务使用。我们常用的定时方法是定时器，把调度器放在定时中，可以简单的实现时间片轮询法。
+
+在线程介绍中，我们可以发现，线程的调用是根据优先级来进行启用的，优先级高的线程先启用，线程挂起后或者运行完毕后才会启动其他线程。
+
+而在相同优先级时，CPU会如何处理线程呢？是并行启动还是并行启动话说先运行完线程1再运行线程2？
+
+- 并发
+
+![image](/assets/z1n24ai2dk.png)
+
+在操作系统中，是指一个时间段中有几个程序都处于已启动运行到运行完毕之间，且这几个程序都是在同一个处理机上运行。其中两种并发关系分别是同步和互斥
+
+- [ ] 微观角度
+
+所有的并发处理都有排队等候，唤醒，执行等这样的步骤，在微观上他们都是序列被处理的，如果是同一时刻到达的请求（或线程）也会根据优先级的不同，而先后进入队列排队等候执行。
+
+- [ ] 宏观角度
+
+多个几乎同时到达的请求（或线程）在宏观上看就像是同时在被处理。
+
+- 并行
+
+![image](/assets/xk32m4f60l.png)
+
+并行指两个或两个以上事件（或线程）在同一时刻发生，是真正意义上的不同事件或线程在同一时刻，在不同CPU资源上（多核），同时执行。并行，不存在像并发那样竞争CPU资源，等待执行的概念，因为并行状态下的线程分布在不同的CPU上。
+
+很显然对于单核CPU，两个优先级相同的线程将交替地换入或者换出内存，以一个或多个时间片的时间轮询执行，而让人再宏观上感觉这些线程是在同时进行，但其实是以轮询的方式交替进行，到了规定的时间片自动挂起启用下一个线程，然后重复。
+
+![image](/assets/捕获.PNG)
+
+## 代码实现
+
+定义一个函数入口使其每次执行count数加一，每次count数到5的倍数时打印，并且打印当前线程
+
+```
+/* 线程入口 */
+static void thread_entry(void* parameter)
+{
+    rt_uint32_t value;
+    rt_uint32_t count = 0;
+
+    value = (rt_uint32_t)parameter;
+    while (1)
+    {
+        if(0 == (count % 5))
+        {           
+            rt_kprintf("thread %d is running ,thread %d count = %d\n", value , value , count);      
+
+            if(count > 2000)
+                return;            
+        }
+         count++;
+     }  
+}
+
+```
+
+动态创建2个不同线程都以这个函数为入口
+
+```
+ tid = rt_thread_create("thread1", 
+                            thread_entry, (void*)1, 
+                            THREAD_STACK_SIZE, 
+                            THREAD_PRIORITY, THREAD_TIMESLICE); 
+```
+
+```
+tid = rt_thread_create("thread2", 
+                            thread_entry, (void*)2,
+                            THREAD_STACK_SIZE, 
+                            THREAD_PRIORITY, THREAD_TIMESLICE-5);
+```
+
+*thread2时间片比thread1少5*
+
+我们开看一看执行结果
+
+```
+
+ \ | /
+- RT -     Thread Operating System
+ / | \     3.1.0 build Jun 26 2023
+ 2006 - 2018 Copyright by rt-thread team
+msh >times
+timeslice_sample
+msh >timeslice_sample
+msh >thread 1 is running ,thread 1 count = 0
+thread 1 is running ,thread 1 count = 5
+thread 1 is running ,thread 1 count = 10
+thread 1 is running ,thread 1 count = 15
+thread 1 is running ,thread 1 count = 20
+thread 1 is running ,thread 1 count = 25
+thread 1 is running ,thread 1 count = 30
+thread 1 is running ,thread 1 count = 35
+thread 1 is running ,thread 1 count = 40
+thread 1 is running ,thread 1 count = 45
+thread 1 is running ,thread 1 count = 50
+thread 1 is running ,thread 1 count = 55
+thread 1 is running ,thread 1 count = 60
+thread 1 is running ,thread 1 count = 65
+thread 1 is running ,thread 1 count = 70
+thread 1 is running ,thread 1 count = 75
+thread 1 is running ,thread 1 count = 80
+thread 1 is running ,thread 1 count = 85
+thread 1 is running ,thread 1 count = 90
+thread 1 is running ,thread 1 count = 95
+thread 1 is running ,thread 1 count = 100
+thread 1 is running ,thread 1 count = 105
+thread 1 is running ,thread 1 count = 110
+thread 1 is running ,thread 1 count = 115
+thread 1 is running ,thread 1 count = 120
+threthread 2 is running ,thread 2 count = 0
+thread 2 is running ,thread 2 count = 5
+thread 2 is running ,thread 2 count = 10
+thread 2 is running ,thread 2 count = 15
+thread 2 is running ,thread 2 count = 20
+thread 2 is running ,thread 2 count = 25
+thread 2 is running ,thread 2 count = 30
+thread 2 is running ,thread 2 count = 35
+thread 2 is running ,thread 2 count = 40
+thread 2 is running ,thread 2 count = 45
+thread 2 is running ,thread 2 count = 50
+thread 2 is running ,thread 2 count = 55
+thread 2 is running ,thread 2 count = 60
+thread 2 is running ,thread 2 cad 2 is running ,thread 2 count = 65
+ thread 1 is running ,thread 1 count = 130
+thread 1 is running ,thread 1 count = 135
+thread 1 is running ,thread 1 count = 140
+thread 1 is running ,thread 1 count = 145
+thread 1 is running ,thread 1 count = 150
+thread 1 is running ,thread 1 count = 155
+thread 1 is running ,thread 1 count = 160
+thread 1 is running ,thread 1 count = 165
+thread 1 is running ,thread 1 count = 170
+thread 1 is running ,thread 1 count = 175
+thread 1 is running ,thread 1 count = 180
+thread 1 is running ,thread 1 count = 185
+thread 1 is running ,thread 1 count = 190
+thread 1 is running ,thread 1 count = 195
+thread 1 is running ,thread 1 count = 200
+thread 1 is running ,thread 1 count = 205
+thread 1 is running ,thread 1 count = 210
+thread 1 is running ,thread 1 count = 215
+thread 1 is running ,thread 1 count = 220
+thread 1 is running ,thread 1 count = 225
+thread 1 is running ,thread 1 count = 230
+thread 1 is running ,thread 1 count = 235
+thread 1 is running ,thread 1 count = 240
+thread 1 is running ,thread 1 count = 245
+thread 1 is running ,thread 1 count = 250
+thread 1 is running ,thread 1 countount = 255thread 2 is running ,thread 2 count = 70
+thread 2 is running ,thread 2 count = 75
+thread 2 is running ,thread 2 count = 80
+thread 2 is running ,thread 2 count = 85
+thread 2 is running ,thread 2 count = 90
+thread 2 is running ,thread 2 count = 95
+thread 2 is running ,thread 2 count = 100
+thread 2 is running ,thread 2 count = 105
+thread 2 is running ,thread 2 count = 110
+thread 2 is running ,thread 2 count = 115
+thread 2 is running ,thread 2 count = 120
+thread 2 is running ,thread 2 count = 125
+thread 2 is running ,thread 2 count = 130
+thread 2 is  = 135
+thread 1 is running ,thread 1 count = 260
+thread 1 is running ,thread 1 count = 265
+thread 1 is running ,thread 1 count = 270
+thread 1 is running ,thread 1 count = 275
+thread 1 is running ,thread 1 count = 280
+thread 1 is running ,thread 1 count = 285
+thread 1 is running ,thread 1 count = 290
+thread 1 is running ,thread 1 count = 295
+thread 1 is running ,thread 1 count = 300
+thread 1 is running ,thread 1 count = 305
+thread 1 is running ,thread 1 count = 310
+thread 1 is running ,thread 1 count = 315
+thread 1 is running ,thread 1 count = 320
+thread 1 is running ,thread 1 count = 325
+thread 1 is running ,thread 1 count = 330
+thread 1 is running ,thread 1 count = 335
+thread 1 is running ,thread 1 count = 340
+thread 1 is running ,thread 1 count = 345
+thread 1 is running ,thread 1 count = 350
+thread 1 is running ,thread 1 count = 355
+thread 1 is running ,thread 1 count = 360
+thread 1 is running ,thread 1 count = 365
+thread 1 is running ,thread 1 count = 370
+thread 1 is running ,thread 1 count = 375
+thread 1 is running ,thread 1 count = 380
+thread 1 is running ,thread 1 count = 385
+thread 1 is running ,thrunning ,thread 1 count = 390
+thread 2 is running ,thread 2 count = 140
+thread 2 is running ,thread 2 count = 145
+thread 2 is running ,thread 2 count = 150
+thread 2 is running ,thread 2 count = 155
+thread 2 is running ,thread 2 count = 160
+thread 2 is running ,thread 2 count = 165
+thread 2 is running ,thread 2 count = 170
+thread 2 is running ,thread 2 count = 175
+thread 2 is running ,thread 2 count = 180
+thread 2 is running ,thread 2 count = 185
+thread 2 is running ,thread 2 count = 190
+thread 2 is running ,thread 2 count = 195
+thread 2 is running ,thread read 2 count = 200
+thread 1 is running ,thread 1 count = 395
+thread 1 is running ,thread 1 count = 400
+thread 1 is running ,thread 1 count = 405
+thread 1 is running ,thread 1 
+
+```
+
+我们可以看到线程1count差不多运行到120的时候，切换到线程2，然后线程2的count差不多运行到65的时候又把CPU的使用权交给线程1，如此往复，其中count65到120差不多就是相差的5个时间片的时间。
+
+由于线程之间严格遵循时间片的规则，我们可以发现线程间在时间片快结束的时候的打印甚至直接被中断，开始进行下一个线程。
