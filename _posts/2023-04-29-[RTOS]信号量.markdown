@@ -21,6 +21,46 @@ categories: C语言   RTOS
 
 - **同步**：是指在互斥的基础上（大多数情况），通过其它机制实现访问者对资源的有序访问。在大多数情况下，同步已经实现了互斥，特别是所有写入资源的情况必定是互斥的。
 
+#### 信号量的创建
+
+- **静态创建：**
+
+```
+rt_sem_init	(	rt_sem_t 	sem,
+const char * 	name,
+rt_uint32_t 	value,
+rt_uint8_t 	flag
+)
+参数
+sem	指定的信号量对象句柄
+name	信号量的名称
+value	信号量初始化时的值
+flag	信号量的标志位
+```
+
+- **动态创建：**
+
+```
+rt_sem_create(const char * name,rt_uint32_t value,rt_uint8_t flag )
+
+参数
+name	信号量的名称
+value	信号量初始化时的值
+flag	信号量的标志位
+```
+
+- **信号量获取：**
+
+```
+rt_sem_take	(	rt_sem_t 	sem,rt_int32_t 	time )
+```
+
+- **信号量释放：**
+
+```
+rt_sem_release	(	rt_sem_t 	sem	) 
+```
+
 ## 代码演示
 
 #### 信号量
