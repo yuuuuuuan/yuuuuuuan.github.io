@@ -15,3 +15,182 @@ categories: C语言   RTOS
 
 ## 代码实现
 
+创建三个信号量
+
+```
+/* 初始化3个信号量 */
+    rt_sem_init(&sem_lock, "lock",     1,      RT_IPC_FLAG_FIFO);
+    rt_sem_init(&sem_empty, "empty",   MAXSEM, RT_IPC_FLAG_FIFO);
+    rt_sem_init(&sem_full, "full",     0,      RT_IPC_FLAG_FIFO);
+```
+
+*"lock"信号量表示对资源进行操作时对其上锁（一时间只允许一个线程对其操作）*
+
+*“empty”信号量表示初始有5个空位，每次消费者操作都会占用一个empty*
+
+*“full”信号量初始值为0，只有在生产者生产完后才会发布1个满位，消费者才能take，保证了期间同步*
+
+生产者线程创建：
+
+```
+/* 创建生产者线程 */
+    producer_tid = rt_thread_create("producer",
+                                    producer_thread_entry, RT_NULL,
+                                    THREAD_STACK_SIZE,
+                                    THREAD_PRIORITY - 1, THREAD_TIMESLICE);
+    if (producer_tid != RT_NULL)
+    {
+        rt_thread_startup(producer_tid);
+    }
+    else
+    {
+        rt_kprintf("create thread producer failed");
+        return -1;
+    }
+```
+
+2个消费者线程的创建：
+
+```
+/* 创建消费者线程 */
+    consumer_tid = rt_thread_create("consumer2",
+                                    consumer_thread_entry, RT_NULL,
+                                    THREAD_STACK_SIZE,
+                                    THREAD_PRIORITY + 1, THREAD_TIMESLICE);
+    if (consumer_tid != RT_NULL)
+    {
+        rt_thread_startup(consumer_tid);
+    }
+    else
+    {
+        rt_kprintf("create thread consumer 1 failed");
+        return -1;
+    }
+```
+
+生产者线程入口：
+
+```
+/* 消费者线程入口 */
+void consumer_thread_entry(void *parameter)
+{
+    rt_uint32_t sum = 0;
+
+    while (1)
+    {
+        /* 获取一个满位 */
+        rt_sem_take(&sem_full, RT_WAITING_FOREVER);
+
+        /* 临界区，上锁进行操作 */
+        rt_sem_take(&sem_lock, RT_WAITING_FOREVER);
+        sum += array[get % MAXSEM];
+        rt_kprintf("the consumer[%d] get a number: %d\n", (get % MAXSEM), array[get % MAXSEM]);
+        get++;
+        rt_sem_release(&sem_lock);
+
+        /* 释放一个空位 */
+        rt_sem_release(&sem_empty);
+
+        /* 生产者生产到10个数目，停止，消费者线程相应停止 */
+        if (get == 100) break;
+
+        /* 暂停一小会时间 */
+        rt_thread_mdelay(50);
+    }
+
+    rt_kprintf("the consumer sum is: %d\n", sum);
+    rt_kprintf("the consumer exit!\n");
+}
+```
+
+消费者线程入口：
+
+```
+/* 消费者线程入口 */
+void consumer2_thread_entry(void *parameter)
+{
+    rt_uint32_t sum2 = 0;
+
+    while (1)
+    {
+        /* 获取一个满位 */
+        rt_sem_take(&sem_full, RT_WAITING_FOREVER);
+
+        /* 临界区，上锁进行操作 */
+        rt_sem_take(&sem_lock, RT_WAITING_FOREVER);
+        sum2 += array[get % MAXSEM];
+        rt_kprintf("the consumer[%d] get a number: %d\n", (get % MAXSEM), array[get % MAXSEM]);
+        get++;
+        rt_sem_release(&sem_lock);
+
+        /* 释放一个空位 */
+        rt_sem_release(&sem_empty);
+
+        /* 生产者生产到10个数目，停止，消费者线程相应停止 */
+        if (get == 100) break;
+
+        /* 暂停一小会时间 */
+        rt_thread_mdelay(50);
+    }
+
+    rt_kprintf("the consumer sum is: %d\n", sum2);
+    rt_kprintf("the consumer exit!\n");
+}
+```
+
+结果打印：
+
+```
+
+ \ | /
+- RT -     Thread Operating System
+ / | \     3.1.0 build Jun 26 2023
+ 2006 - 2018 Copyright by rt-thread team
+msh >pro
+producer_consumer
+msh >producer_consumer
+the producer generates a number: 1
+the consumer[0] get a number: 1
+the producer generates a number: 2
+the consumer[1] get a number: 2
+the producer generates a number: 3
+the producer generates a number: 4
+the consumer[2] get a number: 3
+the consumer[3] get a number: 4
+the producer generates a number: 5
+the producer generates a number: 6
+the consumer[4] get a number: 5
+the producer generates a number: 7
+the consumer[0] get a number: 6
+the producer generates a number: 8
+the producer generates a number: 9
+the consumer[1] get a number: 7
+the consumer[2] get a number: 8
+the producer generates a number: 10
+the producer generates a number: 11
+the consumer[3] get a number: 9
+the producer generates a number: 12
+the consumer[4] get a number: 10
+the producer generates a number: 13
+the producer generates a number: 14
+the consumer[0] get a number: 11
+the consumer[1] get a number: 12
+the producer generates a number: 15
+the producer generates a number: 16
+the consumer[2] get a number: 13
+the producer generates a number: 17
+the consumer[3] get a number: 14
+the producer generates a number: 18
+the producer generates a number: 19
+the consumer[4] get a number: 15
+the consumer[0] get a number: 16
+the producer generates a number: 20
+the producer generates a number: 21
+the consumer[1] get a number: 17
+the producer generates a number: 22
+the consumer[2] get a number: 18
+the producer generates a number: 23
+the consumer[3] get a number: 19
+the producer generates a number: 24
+```
+
