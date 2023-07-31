@@ -23,3 +23,203 @@ categories: C语言   RTOS
 
 ## 代码演示
 
+创建5个用于保护现场的互斥锁
+
+```
+/* 创建一个动态互斥量 */
+    mutex_fork1 = rt_mutex_create("mutex_fork1", RT_IPC_FLAG_FIFO);
+    if (mutex_fork1 == RT_NULL)
+    {
+        rt_kprintf("create fork1 mutex failed.\n");
+        return -1;
+    }
+    ...
+```
+
+*用于表示每个哲学家在操作叉子时只能有1个人在操作*
+
+创建5个用于表示叉子的信号量
+
+```
+/* 创建一个动态信号量，初始值是1 */
+    sem_fork1 = rt_sem_create("sem_fork1", 1, RT_IPC_FLAG_FIFO);
+    if (sem_fork1 == RT_NULL)
+    {
+        rt_kprintf("create fork1 semaphore failed.\n");
+        return -1;
+    }
+    else
+    {
+        rt_kprintf("create done. fork1 semaphore value = 0.\n");
+    }
+    ...
+```
+
+*初值是1表示空闲状态，当叉子被使用时（在哲学家手中）则表示被take，变成0*
+
+创建5个线程表示5个哲学家
+
+```
+//哲学家1
+		philosopher1 = rt_thread_create("philosopher1",
+                                    philosopher1_entry, RT_NULL,
+                                    THREAD_STACK_SIZE,
+                                    THREAD_PRIORITY, THREAD_TIMESLICE);
+    if (philosopher1 != RT_NULL)
+    {
+        rt_thread_startup(philosopher1);
+    }
+    else
+    {
+        rt_kprintf("create thread philosopher1 failed");
+        return -1;
+    }
+    ...
+```
+
+对应函数线程入口
+
+```
+void philosopher1_entry(void *parameter)
+{
+	while(1)
+      {
+          rt_mutex_take(mutex_fork1, RT_WAITING_FOREVER);
+					rt_sem_take(sem_fork1, RT_WAITING_FOREVER);
+					rt_kprintf("philosopher1 take fork1.\n" );
+          rt_mutex_take(mutex_fork5, RT_WAITING_FOREVER);      
+					rt_sem_take(sem_fork5, RT_WAITING_FOREVER);				
+          rt_kprintf("philosopher1 take fork5.\n" ); 
+					rt_kprintf("==============================>philosopher1 is eating.\n" ); 
+          rt_sem_release(sem_fork5);
+					rt_mutex_release(mutex_fork5);
+					rt_kprintf("philosopher1 put down fork5.\n" );
+          rt_sem_release(sem_fork1);
+					rt_mutex_release(mutex_fork1);
+					rt_kprintf("philosopher1 put down fork1.\n" );
+					rt_thread_mdelay(50);
+       }
+}
+...
+```
+
+最后打印结果
+
+```
+
+ \ | /
+- RT -     Thread Operating System
+ / | \     3.1.0 build Jun 26 2023
+ 2006 - 2018 Copyright by rt-thread team
+msh >phi
+phiosophers
+msh >phiosophers
+create done. fork1 semaphore value = 0.
+create done. fork2 semaphore value = 0.
+create done. fork3 semaphore value = 0.
+create done. fork4 semaphore value = 0.
+create done. fork5 semaphore value = 0.
+philosopher1 take fork1.
+philosopher1 take fork5.
+==============================>philosopher1 is eating.
+philosopher1 put down fork5.
+philosopher1 put down fork1.
+philosopher2 take fork2.
+philosopher2 take fork1.
+==============================>philosopher2 is eating.
+philosopher2 put down fork1.
+philosopher2 put down fork2.
+philosopher3 take fork3.
+philosopher3 take fork2.
+==============================>philosopher3 is eating.
+philosopher3 put down fork2.
+philosopher3 put down fork3.
+philosopher4 take fork4.
+philosopher4 take fork3.
+==============================>philosopher4 is eating.
+philosopher4 put down fork3.
+philosopher4 put down fork4.
+philosopher1 take fork1.
+philosopher1 take fork5.
+==============================>philosopher1 is eating.
+philosopher1 put down fork5.
+philosopher1 put down fork1.
+philosopher5 take fork5.
+philosopher5 take fork4.
+==============================>philosopher5 is eating.
+philosopher5 put down fork4.
+philosopher5 put down fork5.
+philosopher2 take fork2.
+philosopher2 take fork1.
+==============================>philosopher2 is eating.
+philosopher2 put down fork1.
+philosopher2 put down fork2.
+philosopher3 take fork3.
+philosopher3 take fork2.
+==============================>philosopher3 is eating.
+philosopher3 put down fork2.
+philosopher3 put down fork3.
+philosopher4 take fork4.
+philosopher4 take fork3.
+==============================>philosopher4 is eating.
+philosopher4 put down fork3.
+philosopher4 put down fork4.
+philosopher1 take fork1.
+philosopher1 take fork5.
+==============================>philosopher1 is eating.
+philosopher1 put down fork5.
+philosopher1 put down fork1.
+philosopher5 take fork5.
+philosopher5 take fork4.
+==============================>philosopher5 is eating.
+philosopher5 put down fork4.
+philosopher5 put down fork5.
+philosopher2 take fork2.
+philosopher2 take fork1.
+==============================>phphilosopher3 take fork3.
+ilosopher2 is eating.
+philosopher2 put down fork1.
+philosopher2 put down fork2.
+philosopher3 take fork2.
+==============================>philosopher3 is eating.
+philosopher3 put down fork2.
+philosopher3 put down fork3.
+philosopher4 take fork4.
+philosopher4 take fork3.
+==============================>philosophephilosopher1 take fork1.
+philosopher1 take fork5.
+==============================>philosopher1 is eating.
+philosopher1 put down fork5.
+philosopher1 put down fork1.
+r1 is eating.
+philosopher4 put down fork3.
+philosopher4 put down fork4.
+philosopher5 take fork5.
+philosopher5 take fork4.
+==============================>philosopher5 is eating.
+philosopher5 put down fork4.
+philosopher5 put down fork5.
+philosopher2 take fork2.
+philosopher2 take fork1.
+==============================>philosopher2 is eating.
+philosopher2 put down fork1.
+philosopher2 put down fork2.
+philosopher3 take fork3.
+philosopher3 take fork2.
+==============================>philosopher3 is eating.
+philosopher3 put down fork2.
+philosopher3 put down fork3.
+philosopher1 take fork1.
+philosopher1 take fork5.
+==============================>philosopher1 is eating.
+philosopher1 put down fork5.
+philosopher1 put down fork1.
+philosopher4 take fork4.
+philosopher4 take fork3.
+==============================>philosopher4 is eating.
+philosopher4 put down fork3.
+ph
+
+```
+
+各哲学家依次食用，没有发生锁死的情况
