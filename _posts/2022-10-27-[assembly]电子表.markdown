@@ -1,0 +1,8 @@
+---
+layout: post
+title:  "[assembly]设计:电子表"
+date:   2022-10-27
+categories: assembly
+---
+
+[源码在这里](https://github.com/yuuuuuuan/clock)	用汇编来设计电子表
