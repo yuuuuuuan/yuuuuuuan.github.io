@@ -8,3 +8,173 @@ categories: C语言   RTOS
 [源码在这里](https://github.com/yuuuuuuan/event)	事件集
 
 ## 介绍
+
+RT-Thread 中的事件集，也就是其他 RTOS 中的事件标志组。事件集也是线程（任务）间同步的一种机制。前面介绍的两种线程间同步的方式（信号量和互斥量）都是一对一；而事件集可以实现一对多、多对多的线程同步。
+
+- **理解事件集**
+
+多个事件的集合用一个 32 位无符号整型变量来表示，变量的每一位代表一个事件，线程通过 “逻辑与” 或 “逻辑或” 将一个或多个事件关联起来，形成事件组合。
+
+RT-Thread 中的事件集有以下特点：
+
+- 事件只与线程相关，事件间相互独立。
+- 事件仅用于同步，不提供数据传输功能
+- 事件无排队性，即多次发送同一个事件（且线程还未读走），其效果等同于发送了一次。
+
+当线程等待事件同步时，可以通过 32 个事件标志和这个事件信息标记来判断当前接收的事件是否满足同步条件。
+
+- 逻辑与，则表示线程 #1 只有在事件 1 和事件 30 都发生以后才会被触发唤醒。
+- 逻辑或，则事件1 或事件 30 中的任意一个发生都会触发唤醒线程 #1。
+- 同时设置了清除标记位，则当线程 #1 唤醒后将主动把事件 1 和事件 30 清为零，否则事件标志将依然存在（即置 1）。
+
+- **事件集控制块**
+
+在 RT-Thread 中，操作系统管理事件的数据结构称为事件集控制块，由结构体 `struct rt_event` 表示。另外，`rt_event_t` 表示的是事件集的句柄，即指向事件集控制块的指针。
+
+事件集控制块结构体定义如下：
+
+```
+struct rt_event
+{
+    struct rt_ipc_object parent;                        /**< inherit from ipc_object */
+
+    rt_uint32_t          set;                           /**< event set */
+};
+typedef struct rt_event *rt_event_t;
+```
+
+- **创建事件集**
+
+- 动态创建
+
+```
+rt_event_t rt_event_create(const char* name, rt_uint8_t flag);
+```
+
+- 静态创建
+
+```
+rt_err_t rt_event_init(rt_event_t event, const char* name, rt_uint8_t flag)
+```
+
+- 发送事件
+
+```
+rt_err_t rt_event_send(rt_event_t event, rt_uint32_t set);
+```
+
+- 接收事件
+
+```
+rt_err_t rt_event_recv(rt_event_t   event,
+                       rt_uint32_t  set,
+                       rt_uint8_t   option,
+                       rt_int32_t   timeout,
+                       rt_uint32_t *recved)
+```
+
+## 代码演示
+
+先创建一个事件集
+
+```
+ /* 初始化事件对象 */
+    result = rt_event_init(&event, "event", RT_IPC_FLAG_FIFO);
+    if (result != RT_EOK)
+    {
+        rt_kprintf("init event failed.\n");
+        return -1;
+    }
+```
+
+对于线程2，我们用他来给线程1发送事件集，之后线程1做出相应反应
+
+```
+/* 线程2入口 */
+static void thread2_send_event(void *param)
+{
+
+		rt_kprintf("thread2: send event3\n");
+    rt_event_send(&event, EVENT_FLAG3);
+    rt_thread_mdelay(200);
+
+    rt_kprintf("thread2: send event5\n");
+    rt_event_send(&event, EVENT_FLAG5);
+    rt_thread_mdelay(200);
+
+    rt_kprintf("thread2: send event3\n");
+    rt_event_send(&event, EVENT_FLAG3);
+    rt_kprintf("thread2 leave.\n");
+
+}
+```
+
+```
+/* 线程1入口函数 */
+static void thread1_recv_event(void *param)
+{
+
+		rt_uint32_t e;
+
+    /* 第一次接收事件，事件3或事件5任意一个可以触发线程1，接收完后清除事件标志 */
+    if (rt_event_recv(&event, (EVENT_FLAG3 | EVENT_FLAG5),
+                      RT_EVENT_FLAG_OR | RT_EVENT_FLAG_CLEAR,
+                      RT_WAITING_FOREVER, &e) == RT_EOK)
+    {
+        rt_kprintf("thread1: OR recv event 0x%x\n", e);
+    }
+
+    rt_kprintf("thread1: delay 1s to prepare the second event\n");
+    rt_thread_mdelay(1000);
+
+    /* 第二次接收事件，事件3和事件5均发生时才可以触发线程1，接收完后清除事件标志 */
+    if (rt_event_recv(&event, (EVENT_FLAG3 | EVENT_FLAG5),
+                      RT_EVENT_FLAG_AND | RT_EVENT_FLAG_CLEAR,
+                      RT_WAITING_FOREVER, &e) == RT_EOK)
+    {
+        rt_kprintf("thread1: AND recv event 0x%x\n", e);
+    }
+    rt_kprintf("thread1 leave.\n");
+
+
+}
+```
+
+结果打印：
+
+```
+
+ \ | /
+- RT -     Thread Operating System
+ / | \     3.1.0 build Jun 26 2023
+ 2006 - 2018 Copyright by rt-thread team
+msh >event_sample
+thread2: send event3
+thread1: OR recv event 0x20
+thread1: delay 1s to prepare the second event
+msh >thread2: send event5
+thread2: send event3
+thread2 leave.
+thread1: AND recv event 0x28
+thread1 leave.
+```
+
+从结果来看：
+
+线程2先向事件集中发送了EVENT_FLAG3（1左移5位）
+
+而线程1第一次接受事件逻辑为接受到EVENT_FLAG3或EVENT_FLAG5都可以触发
+
+所以第一次就打印1左移5位即为0x20
+
+之后线程2先向事件集中发送了EVENT_FLAG5（1左移3位）
+
+而此时线程1为第二次接受，此时逻辑为EVENT_FLAG3和EVENT_FLAG5一起收到才能出发线程1
+
+这次不触发线程1
+
+而在之后200ms后，线程2又向事件集中发送了EVENT_FLAG3
+
+线程1同时受到EVENT_FLAG3（1左移5位）和EVENT_FLAG5（1左移3位）
+
+所以打印0x28
