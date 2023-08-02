@@ -1,10 +1,10 @@
 ---
 layout: post
-title:  "[verilog]设计:基于verilog的交通灯原理及其实现"
+title:  "[verilog]设计:基于FPGA的交通灯原理及其实现"
 date:   2022-09-30 
 categories: verilog
 ---
-[源码在这里](https://github.com/yuuuuuuan/trafficlight/)	FPGA使用verilog语言设计交通灯
+[源码在这里](https://github.com/yuuuuuuan/trafficlight/)	使用verilog语言设计交通灯
 
 ## 介绍
 
