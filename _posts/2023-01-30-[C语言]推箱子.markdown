@@ -1,6 +1,6 @@
 ---
 layout: post
-title:  "[C语言]项目:基于C51和LCD12864的推箱子游戏实现"
+title:  "[C语言]项目:基于C51和LCD12864的推箱子实现"
 date:   2023-01-30 
 categories: C语言
 ---
