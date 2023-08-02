@@ -1,10 +1,10 @@
 ---
 layout: post
-title:  "[verilog]设计:基于Verilog的VGA显示原理及其实现"
+title:  "[verilog]设计:基于FPGA的VGA显示原理及其实现"
 date:   2022-12-28 
 categories: verilog
 ---
-FPGA使用verilog语言设计的VGA模块
+[源码在这里](https://github.com/yuuuuuuan/FPGA_VGA)	FPGA使用verilog语言设计的VGA模块
 
 ## 介绍
 
