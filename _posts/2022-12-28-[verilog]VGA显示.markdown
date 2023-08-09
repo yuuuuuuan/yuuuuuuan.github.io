@@ -69,7 +69,7 @@ GRAY = 24'h35141A;				//灰色
 	 parameter	vidon = 1;
 ```
 
-显示像素点：
+显示像素点:
 
 ```
 if((pix_x >= h_diff)&&(pix_x <h_diff + length)&&(pix_y >= v_diff)&&(pix_y < v_diff + length)&&(state == 0))
