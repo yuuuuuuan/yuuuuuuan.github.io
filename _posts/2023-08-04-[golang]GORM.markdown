@@ -5,7 +5,7 @@ date:   2023-08-04
 categories: golang	database
 ---
 
-[源码在这里]()	gorm的介绍及其使用
+[源码在这里]()	gorm的介绍及其使用(未完成)
 
 ## 介绍
 
