@@ -5,7 +5,7 @@ date:   2023-07-30
 categories: golang
 ---
 
-自增id,uuid和雪花算法的优劣以及区别
+自增id,uuid和雪花算法的优劣以及区别(未完成)
 
 ## 介绍
 
