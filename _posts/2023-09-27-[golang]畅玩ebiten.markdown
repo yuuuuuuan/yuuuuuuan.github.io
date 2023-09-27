@@ -70,3 +70,4 @@ func main() {
 }
 ```
 
+![image](C:/Users/Administrator/Documents/GitHub/yuuuuuuan.github.io/assets/part1.png)
