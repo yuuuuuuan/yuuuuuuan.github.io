@@ -121,3 +121,5 @@ func (g *Game) Draw(screen *ebiten.Image) {
 ```
 
 ![image](\assets\circle.png)
+
+### Part2 键盘输入
