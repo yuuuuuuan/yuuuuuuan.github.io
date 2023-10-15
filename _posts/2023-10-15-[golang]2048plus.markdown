@@ -1,0 +1,250 @@
+---
+layout: post
+title:  "[golang]项目:2048PLUS"
+date:   2023-10-15
+categories: golang	ebiten
+---
+
+[源码在这里](https://github.com/yuuuuuuan/2048plus)	用golang实现游戏2048
+
+## 介绍
+
+## 模块
+
+### 	外设输入
+
+在游戏中，我们主要需要控制游戏的4个方向(up，down，left，right)，用键盘来说很好实现只需要读取`inpututil.IsKeyJustPressed(ebiten.KeyArrowUp)`为真，即键盘是否按下了则可进行游戏上方向的移动。
+
+```
+func (i *Input) Update() {
+	if ebiten.IsKeyPressed(ebiten.KeyLeft){
+		cube.x -= movingSpeed
+		i.msg = "left pressed\n"
+	} else if ebiten.IsKeyPressed(ebiten.KeyRight){
+		cube.x += movingSpeed
+		i.msg = "right pressed\n"
+	} else if ebiten.IsKeyPressed(ebiten.KeyUp){
+		cube.y -= movingSpeed
+		i.msg = "up pressed\n"
+	} else if ebiten.IsKeyPressed(ebiten.KeyDown){
+		cube.y += movingSpeed
+		i.msg = "down pressed\n"
+	} else {
+		i.msg = "none\n"
+	}
+}
+```
+
+但是我们如果要通过鼠标拖拽的形式来控制游戏逻辑上面的上下左右，我们就不能只读取鼠标左右键是否按下，我们还需要读取鼠标state后移动的方向来判断是否是朝想要的方向移动，这里我们可以引用向量来描述鼠标控制游戏的方向。
+
+```
+const (
+	mouseStateNone = 0
+	mouseStatePressing = 1
+	mouseStateSettled = 2
+)
+//鼠标的3种状态
+type Input struct{
+	mouseState    mouseState
+	mouseInitPosX int
+	mouseInitPosY int
+	mouseDir      Dir
+}
+//鼠标所处位置的状态以及代表的方向
+```
+
+此时我们可以通过从鼠标左键按下后读取鼠标当前像素坐标，在从鼠标松开后读取鼠标最终的像素坐标，其中的差值就是鼠标移动的向量，我们就可以通过这个向量来描述游戏逻辑的方向是什么了。
+
+```
+	switch i.mouseState {
+	case mouseStateNone:
+		if ebiten.IsMouseButtonPressed(ebiten.MouseButtonLeft) {
+			x, y := ebiten.CursorPosition()
+			i.mouseInitPosX = x
+			i.mouseInitPosY = y
+			i.mouseState = mouseStatePressing
+		}
+	case mouseStatePressing:
+		if !ebiten.IsMouseButtonPressed(ebiten.MouseButtonLeft) {
+			x, y := ebiten.CursorPosition()
+			dx := x - i.mouseInitPosX
+			dy := y - i.mouseInitPosY
+			d, ok := vecToDir(dx, dy)
+			if !ok {
+				i.mouseState = mouseStateNone
+				break
+			}
+			i.mouseDir = d
+			i.mouseState = mouseStateSettled
+		}
+	case mouseStateSettled:
+		i.mouseState = mouseStateNone
+	}
+```
+
+向量转化为方向函数(abs()函数为取其中数值的绝对值)但是我们不能让其误判我们的操作，在其移动距离过小的情况下我们需要将这种情况忽略，这里我们可以设置如果移动距离小于10个像素就返回false：
+
+```
+func vecToDir(dx, dy int) (Dir, bool) {
+	if abs(dx) < 10 && abs(dy) < 10 {
+		return 0, false
+	}
+	if abs(dx) < abs(dy) {
+		if dy < 0 {
+			return DirUp, true
+		} else {
+			return DirDown, true
+		}
+	}
+	if dx < 0 {
+		return DirLeft, true
+	} else {
+		return DirRight, true
+	}
+}
+```
+
+同样的，如果我们游戏要运行在移动端时，我们需要调用其中的touch来读取触屏的移动方向，其中的方法和鼠标类似：
+
+```
+i.touches = ebiten.AppendTouchIDs(i.touches[:0])
+	switch i.touchState {
+	case touchStateNone:
+		if len(i.touches) == 1 {
+			i.touchID = i.touches[0]
+			x, y := ebiten.TouchPosition(i.touches[0])
+			i.touchInitPosX = x
+			i.touchInitPosY = y
+			i.touchLastPosX = x
+			i.touchLastPosX = y
+			i.touchState = touchStatePressing
+		}
+	case touchStatePressing:
+		if len(i.touches) >= 2 {
+			break
+		}
+		if len(i.touches) == 1 {
+			if i.touches[0] != i.touchID {
+				i.touchState = touchStateInvalid
+			} else {
+				x, y := ebiten.TouchPosition(i.touches[0])
+				i.touchLastPosX = x
+				i.touchLastPosY = y
+			}
+			break
+		}
+		if len(i.touches) == 0 {
+			dx := i.touchLastPosX - i.touchInitPosX
+			dy := i.touchLastPosY - i.touchInitPosY
+			d, ok := vecToDir(dx, dy)
+			if !ok {
+				i.touchState = touchStateNone
+				break
+			}
+			i.touchDir = d
+			i.touchState = touchStateSettled
+		}
+	case touchStateSettled:
+		i.touchState = touchStateNone
+	case touchStateInvalid:
+		if len(i.touches) == 0 {
+			i.touchState = touchStateNone
+		}
+	}
+}
+
+```
+
+
+
+### 	UI(字体颜色)
+
+- 字体
+
+```
+// tileSmallFont用于value为个位数的tiles上=====2，4，8
+// tileNormalFont用于value为两位数的tiles上====16，32，64
+// tileBigFont用于value为三位数的tiles上=======128，256，，，
+var (
+	tileSmallFont  font.Face
+	tileNormalFont font.Face
+	tileBigFont    font.Face
+)
+```
+
+首先我们创建3种大小的字体以便统一单元格字体大小
+
+```
+func init() {
+	//创建字体
+	tt, err := opentype.Parse(fonts.PressStart2P_ttf)
+	if err != nil {
+		log.Fatalf("Parse: %v", err)
+	}
+	//分别配置三种字体
+	const dpi = 60
+	tileSmallFont, err = opentype.NewFace(tt, &opentype.FaceOptions{
+		Size:    24,
+		DPI:     dpi,
+		Hinting: font.HintingVertical,
+	})
+	if err != nil {
+		log.Fatalf("NewFace: %v", err)
+	}
+	tileNormalFont, err = opentype.NewFace(tt, &opentype.FaceOptions{
+		Size:    32,
+		DPI:     dpi,
+		Hinting: font.HintingVertical,
+	})
+	if err != nil {
+		log.Fatalf("NewFace: %v", err)
+	}
+	tileBigFont, err = opentype.NewFace(tt, &opentype.FaceOptions{
+		Size:    48,
+		DPI:     dpi,
+		Hinting: font.HintingVertical,
+	})
+	if err != nil {
+		log.Fatalf("NewFace: %v", err)
+	}
+}
+```
+
+- 颜色
+
+我们需要在具有不同值的tiles的背景设置不同的颜色背景以便更好区分各个不同值的tiles
+
+以及窗口背景颜色`backgroundColor`整个板的背景颜色`frameColor`tiles的背景颜色`tilesColor`
+
+```
+backgroundColor      = color.RGBA{R: 0xfa, G: 0xf8, B: 0xef, A: 0xff}
+	frameColor           = color.RGBA{R: 0xbb, G: 0xad, B: 0xa0, A: 0xff}
+	tilesColor           = color.RGBA{R: 0xf9, G: 0xf6, B: 0xf2, A: 0xff}
+	backgroundColor0     = color.NRGBA{R: 0xee, G: 0xe4, B: 0xda, A: 0x59}
+	backgroundColor2     = color.RGBA{R: 0xee, G: 0xe4, B: 0xda, A: 0xff}
+	backgroundColor4     = color.RGBA{R: 0xed, G: 0xe0, B: 0xc8, A: 0xff}
+	backgroundColor8     = color.RGBA{R: 0xf2, G: 0xb1, B: 0x79, A: 0xff}
+	backgroundColor16    = color.RGBA{R: 0xf5, G: 0x95, B: 0x63, A: 0xff}
+	backgroundColor32    = color.RGBA{R: 0xf6, G: 0x7c, B: 0x5f, A: 0xff}
+	backgroundColor64    = color.RGBA{R: 0xf6, G: 0x5e, B: 0x3b, A: 0xff}
+	backgroundColor128   = color.RGBA{R: 0xed, G: 0xcf, B: 0x72, A: 0xff}
+	backgroundColor256   = color.RGBA{R: 0xed, G: 0xcc, B: 0x61, A: 0xff}
+	backgroundColor512   = color.RGBA{R: 0xed, G: 0xc8, B: 0x50, A: 0xff}
+	backgroundColor1024  = color.RGBA{R: 0xed, G: 0xc5, B: 0x3f, A: 0xff}
+	backgroundColor2048  = color.RGBA{R: 0xed, G: 0xc2, B: 0x2e, A: 0xff}
+	backgroundColor4096  = color.NRGBA{R: 0xa3, G: 0x49, B: 0xa4, A: 0x7f}
+	backgroundColor8192  = color.NRGBA{R: 0xa3, G: 0x49, B: 0xa4, A: 0xb2}
+	backgroundColor16384 = color.NRGBA{R: 0xa3, G: 0x49, B: 0xa4, A: 0xcc}
+	backgroundColor32768 = color.NRGBA{R: 0xa3, G: 0x49, B: 0xa4, A: 0xe5}
+	backgroundColor65536 = color.NRGBA{R: 0xa3, G: 0x49, B: 0xa4, A: 0xff}
+```
+
+### 	游戏逻辑
+
+- 单元格tiles
+
+tile是游戏逻辑的最小单位，多个tiles组成一整个board也就是画面中的游戏单元格组合
+
+```
+
+```

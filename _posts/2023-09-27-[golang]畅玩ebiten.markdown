@@ -126,5 +126,75 @@ func (g *Game) Draw(screen *ebiten.Image) {
 
 #### 键盘输入
 
+首先创建一个`Input`
 
+```
+type Input struct {
+	//可以写一些需要打印的数据例如key string来显示按键是否按下
+	//也可以输入多种设备，来判断是鼠标或者键盘输入
+	//如果默认是1种设备且不需要实现其他功能时可以直接为空
+}
+```
+
+同时创建一个(i *Input)Update的方法来更新输入并显示按键输入信息
+
+```
+func (i *Input) Update() {
+	if ebiten.IsKeyPressed(ebiten.KeyLeft){
+		
+		i.msg = "left pressed\n"
+	} else if ebiten.IsKeyPressed(ebiten.KeyRight){
+		
+		i.msg = "right pressed\n"
+	} else if ebiten.IsKeyPressed(ebiten.KeyUp){
+		
+		i.msg = "up pressed\n"
+	} else if ebiten.IsKeyPressed(ebiten.KeyDown){
+		
+		i.msg = "down pressed\n"
+	} else {
+		i.msg = "none\n"
+
+	}
+}
+```
+
+如果需要按键传入后修改某个类的参数例如移动则需要另外在Update后传入需要被这个Input影响的类例如：
+
+```
+func (i *Input) Update(cube *Cube, stone *Cube) {
+	if ebiten.IsKeyPressed(ebiten.KeyLeft) && CubeCollision(cube, stone, "left") {
+		cube.x -= movingSpeed
+		i.msg = "left pressed\n"
+	} else if ebiten.IsKeyPressed(ebiten.KeyRight) && CubeCollision(cube, stone, "right") {
+		cube.x += movingSpeed
+		i.msg = "right pressed\n"
+	} else if ebiten.IsKeyPressed(ebiten.KeyUp) && CubeCollision(cube, stone, "up") {
+		cube.y -= movingSpeed
+		i.msg = "up pressed\n"
+	} else if ebiten.IsKeyPressed(ebiten.KeyDown) && CubeCollision(cube, stone, "down") {
+		cube.y += movingSpeed
+		i.msg = "down pressed\n"
+	} else {
+		i.msg = "none\n"
+	}
+}
+```
+
+*这行代码实现了一个Cube类的cube的移动*
+
+最后在总的Game结构体中加入Input，在总的(g *Game)Update中更新input.Update这个方法
+
+```
+type Game struct {
+	input *Input
+	cube  *Cube
+	stone *Cube
+}
+
+func (g *Game) Update() error {
+	g.input.Update(g.cube, g.stone)
+	return nil
+}
+```
 
