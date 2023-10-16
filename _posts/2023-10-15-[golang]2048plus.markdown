@@ -243,8 +243,70 @@ backgroundColor      = color.RGBA{R: 0xfa, G: 0xf8, B: 0xef, A: 0xff}
 
 - 单元格tiles
 
-tile是游戏逻辑的最小单位，多个tiles组成一整个board也就是画面中的游戏单元格组合
+tile是游戏逻辑的最小单位，多个tiles组成一整个board也就是画面中的游戏单元格组合。
+
+```
+type TileData struct {
+	value int
+	x     int
+	y     int
+}
+//`TileData`这个结构是存储tile的坐标以及value
+
+
+
+type Tile struct {
+	current TileData
+	next              TileData
+	movingCount       int
+	startPoppingCount int
+	poppingCount      int
+}
+//`Tile.current`是表示当前这个坐标的Tile
+//`Tile.next`在做出移动后下一个在这个坐标的Tile
+//`Tlie.movingCount`收到移动指令后表示移动速度，为0时静止，其他表示正在移动状态
+//`Tlie.startPoppingCount`指的是刷出新的Tile时方块的pop速度，为0表示完成pop，处于静态，其他表示正在进行pop这个过程
+//`Tlie.poppingCount`指的是合成新的Tile时方块的pop速度，为0表示完成pop，其他表示正在pop这个过程
+```
+
+以下是一些辅助函数：
+
+```
+func (t *Tile) IsMoving() bool {
+	if t.pop.movingCount == 0 {
+		return false
+	} else {
+		return true
+	}
+}
+//用于确定1个Tile是否在移动状态
+
+func (t *Tile) stopAnimation() {
+	if t.pop.movingCount != 0 {
+		t.current = t.next
+		t.next = TileData{}
+	}
+	t.pop.movingCount = 0
+	t.pop.startPoppingCount = 0
+	t.pop.poppingCount = 0
+}
+//当tile还在移动状态时，变更当前的值为操作后next的值，将next的赋为空
+
+func tileAt(tiles map[*Tile]struct{}, x, y int) *Tile {
+	var result *Tile
+	for t := range tiles {
+		if t.current.x != x || t.current.y != y {
+			continue
+		}
+		if result != nil {
+			panic("not reach")
+		}
+		result = t
+	}
+	return result
+}
+//用于返回board(map[*Tile]struct)中第几行第几列的tile
+
 
 ```
 
-```
