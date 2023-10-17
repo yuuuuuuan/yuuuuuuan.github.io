@@ -155,6 +155,32 @@ i.touches = ebiten.AppendTouchIDs(i.touches[:0])
 
 ```
 
+最后我们需要将其所有输入转换为方向输入：
+
+```
+func (i *Input) Dir() (Dir, bool) {
+	if inpututil.IsKeyJustPressed(ebiten.KeyArrowUp) {
+		return DirUp, true
+	}
+	if inpututil.IsKeyJustPressed(ebiten.KeyArrowLeft) {
+		return DirLeft, true
+	}
+	if inpututil.IsKeyJustPressed(ebiten.KeyArrowRight) {
+		return DirRight, true
+	}
+	if inpututil.IsKeyJustPressed(ebiten.KeyArrowDown) {
+		return DirDown, true
+	}
+	if i.mouseState == mouseStateSettled {
+		return i.mouseDir, true
+	}
+	if i.touchState == touchStateSettled {
+		return i.touchDir, true
+	}
+	return 0, false
+}
+```
+
 
 
 ### 	UI(字体颜色)
@@ -306,7 +332,204 @@ func tileAt(tiles map[*Tile]struct{}, x, y int) *Tile {
 	return result
 }
 //用于返回board(map[*Tile]struct)中第几行第几列的tile
+```
 
+#### 游戏核心逻辑
 
+tiles移动：
+
+通过创建tx，ty和`tileAt()`方法来横向纵向历遍`tiles`这个map，判断是否这个tiles在某个方向上能否移动。
+
+```
+func MoveTiles(tiles map[*Tile]struct{}, size int, dir Dir) bool {
+	vx, vy := dir.Vector()
+	tx := []int{}
+	ty := []int{}
+	for i := 0; i < size; i++ {
+		tx = append(tx, i)
+		ty = append(ty, i)
+	}
+	if vx > 0 {
+		sort.Sort(sort.Reverse(sort.IntSlice(tx)))
+	}
+	if vy > 0 {
+		sort.Sort(sort.Reverse(sort.IntSlice(ty)))
+	}
+
+	moved := false
+	for _, j := range ty {
+		for _, i := range tx {
+			t := tileAt(tiles, i, j)
+			if t == nil {
+				continue
+			}
+			if t.next != (TileData{}) {
+				panic("not reach")
+			}
+			if t.IsMoving() {
+				panic("not reach")
+			}
+			// (ii, jj) is the next position for tile t.
+			// (ii, jj) is updated until a mergeable tile is found or
+			// the tile t can't be moved any more.
+			ii := i
+			jj := j
+			for {
+				ni := ii + vx
+				nj := jj + vy
+				if ni < 0 || ni >= size || nj < 0 || nj >= size {
+					break
+				}
+				tt := currentOrNextTileAt(tiles, ni, nj)
+				if tt == nil {
+					ii = ni
+					jj = nj
+					moved = true
+					continue
+				}
+				if t.current.value != tt.current.value {
+					break
+				}
+				if 0 < tt.pop.movingCount && tt.current.value != tt.next.value {
+					// tt is already being merged with another tile.
+					// Break here without updating (ii, jj).
+					break
+				}
+				ii = ni
+				jj = nj
+				moved = true
+				break
+			}
+			// next is the next state of the tile t.
+			next := TileData{}
+			next.value = t.current.value
+			// If there is a tile at the next position (ii, jj), this should be
+			// mergeable. Let's merge.
+			if tt := currentOrNextTileAt(tiles, ii, jj); tt != t && tt != nil {
+				next.value = t.current.value + tt.current.value
+				tt.next.value = 0
+				tt.next.x = ii
+				tt.next.y = jj
+				tt.pop.movingCount = maxMovingCount
+			}
+			next.x = ii
+			next.y = jj
+			if t.current != next {
+				t.next = next
+				t.pop.movingCount = maxMovingCount
+			}
+		}
+	}
+	if !moved {
+		for t := range tiles {
+			t.next = TileData{}
+			t.pop.movingCount = 0
+		}
+	}
+	return moved
+}
+```
+
+添加随机每次移动后添加随机2，4到随机空的区域：
+
+```
+func addRandomTile(tiles map[*Tile]struct{}, size int) error {
+	cells := make([]bool, size*size)
+	for t := range tiles {
+		if t.IsMoving() {
+			panic("not reach")
+		}
+		i := t.current.x + t.current.y*size
+		cells[i] = true
+	}
+	availableCells := []int{}
+	for i, b := range cells {
+		if b {
+			continue
+		}
+		availableCells = append(availableCells, i)
+	}
+	if len(availableCells) == 0 {
+		return errors.New("2048: there is no space to add a new tile")
+	}
+	c := availableCells[rand.Intn(len(availableCells))]
+	v := 2
+	if rand.Intn(10) == 0 {
+		v = 4
+	}
+	x := c % size
+	y := c / size
+	t := NewTile(v, x, y)
+	tiles[t] = struct{}{}
+	return nil
+}
+```
+
+### 画面绘制
+
+单个tile绘制函数：
+
+根据tile的坐标，来将其绘制在相应单元格，并且，在根据pop结构体中的Counter数来对tile的合并动画显示，
+
+生成动画显示，以及移动时的速度进行图像的绘制
+
+```
+func (t *Tile) Draw(boardImage *ebiten.Image) {
+	i, j := t.current.x, t.current.y
+	ni, nj := t.next.x, t.next.y
+	v := t.current.value
+	if v == 0 {
+		return
+	}
+	op := &ebiten.DrawImageOptions{}
+	x := i*tileSize + (i+1)*tileMargin
+	y := j*tileSize + (j+1)*tileMargin
+	nx := ni*tileSize + (ni+1)*tileMargin
+	ny := nj*tileSize + (nj+1)*tileMargin
+	switch {
+	case 0 < t.pop.movingCount:
+		rate := 1 - float64(t.pop.movingCount)/maxMovingCount
+		x = mean(x, nx, rate)
+		y = mean(y, ny, rate)
+	case 0 < t.pop.startPoppingCount:
+		rate := 1 - float64(t.pop.startPoppingCount)/float64(maxPoppingCount)
+		scale := meanF(0.0, 1.0, rate)
+		op.GeoM.Translate(float64(-tileSize/2), float64(-tileSize/2))
+		op.GeoM.Scale(scale, scale)
+		op.GeoM.Translate(float64(tileSize/2), float64(tileSize/2))
+	case 0 < t.pop.poppingCount:
+		const maxScale = 1.2
+		rate := 0.0
+		if maxPoppingCount*2/3 <= t.pop.poppingCount {
+			// 0 to 1
+			rate = 1 - float64(t.pop.poppingCount-2*maxPoppingCount/3)/float64(maxPoppingCount/3)
+		} else {
+			// 1 to 0
+			rate = float64(t.pop.poppingCount) / float64(maxPoppingCount*2/3)
+		}
+		scale := meanF(1.0, maxScale, rate)
+		op.GeoM.Translate(float64(-tileSize/2), float64(-tileSize/2))
+		op.GeoM.Scale(scale, scale)
+		op.GeoM.Translate(float64(tileSize/2), float64(tileSize/2))
+	}
+	op.GeoM.Translate(float64(x), float64(y))
+	op.ColorScale.ScaleWithColor(tileBackgroundColor(v))
+	boardImage.DrawImage(tileImage, op)
+	str := strconv.Itoa(v)
+
+	f := tileBigFont
+	switch {
+	case 3 < len(str):
+		f = tileSmallFont
+	case 2 < len(str):
+		f = tileNormalFont
+	}
+
+	w := font.MeasureString(f, str).Floor()
+	h := (f.Metrics().Ascent + f.Metrics().Descent).Floor()
+	x += (tileSize - w) / 2
+	y += (tileSize-h)/2 + f.Metrics().Ascent.Floor()
+	text.Draw(boardImage, str, f, x, y, tileColor())
+}
 ```
 
