@@ -1,0 +1,8 @@
+---
+layout: post
+title:  "[golang]设计:角色移动碰撞及动画帧显示"
+date:   2023-10-20
+categories: golang	ebiten
+---
+
+[源码在这里](https://github.com/yuuuuuuan/runningman)	用ebiten实现角色移动
